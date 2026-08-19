@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -43,6 +45,49 @@ class _DashboardContentState extends State<_DashboardContent> {
   String _selectedModelFilter = 'All';
   String _selectedSizeFilter = 'All';
 
+  // --- AdMob Variables ---
+  BannerAd? _bannerAd;
+  bool _isAdLoaded = false;
+  
+  final String _adUnitId = Platform.isAndroid
+      ? 'ca-app-pub-8923815584192096/8166475603'
+      : 'ca-app-pub-3940256099942544/2934735716';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_bannerAd == null) {
+      _loadAd();
+    }
+  }
+
+  Future<void> _loadAd() async {
+    final screenWidth = MediaQuery.of(context).size.width.truncate();
+    final size = await AdSize.getAnchoredAdaptiveBannerAdSize(
+      Orientation.portrait,
+      screenWidth,
+    );
+
+    if (size == null) return;
+
+    _bannerAd = BannerAd(
+      adUnitId: _adUnitId,
+      size: size,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (Ad ad) {
+          if (mounted) setState(() => _isAdLoaded = true);
+        },
+        onAdFailedToLoad: (Ad ad, LoadAdError error) {
+          debugPrint('Dashboard BannerAd failed. Code: ${error.code}, Message: ${error.message}');
+          ad.dispose();
+        },
+      ),
+    );
+
+    await _bannerAd!.load();
+  }
+
   Future<String> _savePdfLocally(Uint8List bytes, String fileName) async {
     // file_saver handles extensions automatically, so strip it from the name
     final nameWithoutExt = fileName.endsWith('.pdf')
@@ -69,6 +114,7 @@ class _DashboardContentState extends State<_DashboardContent> {
   @override
   void dispose() {
     ShowcaseView.get().unregister();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -513,7 +559,15 @@ class _DashboardContentState extends State<_DashboardContent> {
             ),
           ),
         ),
-        bottomNavigationBar: const BannerAdWidget(),
+        bottomNavigationBar: _isAdLoaded && _bannerAd != null
+            ? SafeArea(
+                child: SizedBox(
+                  width: _bannerAd!.size.width.toDouble(),
+                  height: _bannerAd!.size.height.toDouble(),
+                  child: AdWidget(ad: _bannerAd!),
+                ),
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }

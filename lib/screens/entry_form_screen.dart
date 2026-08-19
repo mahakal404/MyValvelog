@@ -1,10 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../models/heart_valve_entry.dart';
 import '../providers/entry_provider.dart';
 import '../providers/settings_provider.dart';
-import '../widgets/banner_ad_widget.dart';
 
 class EntryFormScreen extends StatefulWidget {
   final HeartValveEntry? entryToEdit;
@@ -34,16 +35,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
 
   String _selectedSize = '20';
   final List<String> _sizes = [
-    '20',
-    '21.5',
-    '23',
-    '24.5',
-    '26',
-    '27.5',
-    '29',
-    '30.5',
-    '32',
-    '35',
+    '20', '21.5', '23', '24.5', '26', '27.5', '29', '30.5', '32', '35'
   ];
   bool _manualSize = false;
 
@@ -61,59 +53,30 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
 
   bool _isInit = true;
 
+  // --- AdMob Variables ---
+  BannerAd? _bannerAd;
+  bool _isAdLoaded = false;
+  
+  // Real Ad Unit ID
+  final String _adUnitId = Platform.isAndroid
+      ? 'ca-app-pub-8923815584192096/8166475603'
+      : 'ca-app-pub-3940256099942544/2934735716';
+
   @override
   void initState() {
     super.initState();
     _serialNoController.addListener(_syncSerialToBatch);
   }
 
-  void _syncSerialToBatch() {
-    final text = _serialNoController.text;
-    if (text.isEmpty) return;
-
-    // Mirror up to 8 characters to represent model + batch code
-    final batchLength = text.length > 8 ? 8 : text.length;
-    final prefix = text.substring(0, batchLength);
-
-    if (!_batchNoController.text.startsWith(prefix)) {
-      _batchNoController.value = TextEditingValue(
-        text: prefix,
-        selection: TextSelection.collapsed(offset: prefix.length),
-      );
-    }
-  }
-
-  void _onModelChanged(String model) {
-    // Model Prefix Pre-fill
-    _serialNoController.value = TextEditingValue(
-      text: model,
-      selection: TextSelection.collapsed(offset: model.length),
-    );
-
-    // Job Card Auto-fill
-    final now = DateTime.now();
-    final mmm = DateFormat('MMM').format(now).toUpperCase();
-    final yy = DateFormat('yy').format(now);
-    final suffix = '/$mmm/$yy';
-
-    if (model == 'THV2' || model == 'THVP5') {
-      final jobCard = 'TVASM$suffix';
-      _jobCardNoController.value = TextEditingValue(
-        text: jobCard,
-        selection: TextSelection.collapsed(offset: jobCard.length),
-      );
-    } else {
-      _jobCardNoController.value = TextEditingValue(
-        text: suffix,
-        // Place cursor at the beginning so they can type the prefix
-        selection: const TextSelection.collapsed(offset: 0),
-      );
-    }
-  }
-
+  // --- Adaptive Sizing: Load Ad after layout ---
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    
+    if (_bannerAd == null) {
+      _loadAd();
+    }
+
     if (_isInit) {
       if (widget.entryToEdit != null) {
         final entry = widget.entryToEdit!;
@@ -154,7 +117,6 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         _takeTime = entry.takeTime;
         _submitTime = entry.submitTime;
       } else {
-        // New entry, auto-fill from SettingsProvider
         final settings = Provider.of<SettingsProvider>(context, listen: false);
         _signController.text = settings.userName;
         if (_assemblies.contains(settings.assembly)) {
@@ -164,10 +126,45 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
           _selectedSection = settings.section;
         }
         _takeTime = DateTime.now();
-        // Submit time is left null initially for a new entry until user submits it
       }
       _isInit = false;
     }
+  }
+
+  Future<void> _loadAd() async {
+    final screenWidth = MediaQuery.of(context).size.width.truncate();
+    
+    final size = await AdSize.getAnchoredAdaptiveBannerAdSize(
+      Orientation.portrait,
+      screenWidth,
+    );
+
+    if (size == null) {
+      debugPrint('Unable to get adaptive banner size.');
+      return;
+    }
+
+    _bannerAd = BannerAd(
+      adUnitId: _adUnitId,
+      size: size,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (Ad ad) {
+          debugPrint('BannerAd loaded successfully.');
+          if (mounted) {
+            setState(() {
+              _isAdLoaded = true;
+            });
+          }
+        },
+        onAdFailedToLoad: (Ad ad, LoadAdError error) {
+          debugPrint('BannerAd failed to load. Error code: ${error.code}, Message: ${error.message}');
+          ad.dispose();
+        },
+      ),
+    );
+
+    await _bannerAd!.load();
   }
 
   @override
@@ -180,7 +177,49 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     _signController.dispose();
     _modelController.dispose();
     _sizeController.dispose();
+    
+    _bannerAd?.dispose();
     super.dispose();
+  }
+
+  void _syncSerialToBatch() {
+    final text = _serialNoController.text;
+    if (text.isEmpty) return;
+
+    final batchLength = text.length > 8 ? 8 : text.length;
+    final prefix = text.substring(0, batchLength);
+
+    if (!_batchNoController.text.startsWith(prefix)) {
+      _batchNoController.value = TextEditingValue(
+        text: prefix,
+        selection: TextSelection.collapsed(offset: prefix.length),
+      );
+    }
+  }
+
+  void _onModelChanged(String model) {
+    _serialNoController.value = TextEditingValue(
+      text: model,
+      selection: TextSelection.collapsed(offset: model.length),
+    );
+
+    final now = DateTime.now();
+    final mmm = DateFormat('MMM').format(now).toUpperCase();
+    final yy = DateFormat('yy').format(now);
+    final suffix = '/$mmm/$yy';
+
+    if (model == 'THV2' || model == 'THVP5') {
+      final jobCard = 'TVASM$suffix';
+      _jobCardNoController.value = TextEditingValue(
+        text: jobCard,
+        selection: TextSelection.collapsed(offset: jobCard.length),
+      );
+    } else {
+      _jobCardNoController.value = TextEditingValue(
+        text: suffix,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    }
   }
 
   Future<void> _selectDateTime(BuildContext context, bool isTakeTime) async {
@@ -244,7 +283,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         section: _selectedSection,
         borrowedFromAssembly: _isBorrowed ? _borrowedFromAssembly : null,
         takeTime: _takeTime!,
-        submitTime: _submitTime ?? DateTime.now(), // default to now if not set
+        submitTime: _submitTime ?? DateTime.now(),
         timestamp: widget.entryToEdit?.timestamp ?? DateTime.now(),
       );
 
@@ -267,7 +306,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context); // Go back
+        Navigator.pop(context);
       }
     }
   }
@@ -279,268 +318,247 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       appBar: AppBar(
         title: Text(widget.entryToEdit == null ? 'New Entry' : 'Edit Entry'),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Card(
-                      elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          children: [
-                            CheckboxListTile(
-                              title: const Text('Enter Model Manually'),
-                              contentPadding: EdgeInsets.zero,
-                              value: _manualModel,
-                              onChanged: (value) {
-                                setState(() {
-                                  _manualModel = value ?? false;
-                                });
-                              },
-                            ),
-                            if (!_manualModel)
-                              DropdownButtonFormField<String>(
-                                initialValue: _selectedModel,
-                                decoration: const InputDecoration(
-                                  labelText: 'Model',
-                                ),
-                                items: _models.map((model) {
-                                  return DropdownMenuItem(
-                                    value: model,
-                                    child: Text(model),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedModel = value!;
-                                    _onModelChanged(_selectedModel);
-                                  });
-                                },
-                              )
-                            else
-                              TextFormField(
-                                controller: _modelController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Model',
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _serialNoController,
-                              textCapitalization: TextCapitalization.characters,
-                              keyboardType: TextInputType.visiblePassword,
-                              decoration: const InputDecoration(
-                                labelText: 'Serial No.',
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _batchNoController,
-                              textCapitalization: TextCapitalization.characters,
-                              keyboardType: TextInputType.visiblePassword,
-                              decoration: const InputDecoration(
-                                labelText: 'Batch No.',
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _jobCardNoController,
-                              textCapitalization: TextCapitalization.characters,
-                              keyboardType: TextInputType.visiblePassword,
-                              decoration: const InputDecoration(
-                                labelText: 'Job Card No',
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            CheckboxListTile(
-                              title: const Text('Enter Size Manually'),
-                              contentPadding: EdgeInsets.zero,
-                              value: _manualSize,
-                              onChanged: (value) {
-                                setState(() {
-                                  _manualSize = value ?? false;
-                                });
-                              },
-                            ),
-                            if (!_manualSize)
-                              DropdownButtonFormField<String>(
-                                initialValue: _selectedSize,
-                                decoration: const InputDecoration(
-                                  labelText: 'Size',
-                                ),
-                                items: _sizes.map((size) {
-                                  return DropdownMenuItem(
-                                    value: size,
-                                    child: Text(size),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedSize = value!;
-                                  });
-                                },
-                              )
-                            else
-                              TextFormField(
-                                controller: _sizeController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Size',
-                                ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _quantityController,
-                              decoration: const InputDecoration(
-                                labelText: 'Quantity',
-                                filled: true,
-                              ),
-                              keyboardType: TextInputType.number,
-                              readOnly: true,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    key: ValueKey('asm_$_selectedAssembly'),
-                                    initialValue: _selectedAssembly,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Assembly',
-                                      filled: true,
-                                    ),
-                                    readOnly: true,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: TextFormField(
-                                    key: ValueKey('sec_$_selectedSection'),
-                                    initialValue: _selectedSection,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Section',
-                                      filled: true,
-                                    ),
-                                    readOnly: true,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            CheckboxListTile(
-                              title: const Text(
-                                'Borrowed valve from another Assembly?',
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              value: _isBorrowed,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isBorrowed = value ?? false;
-                                  if (_isBorrowed &&
-                                      _borrowedFromAssembly == null) {
-                                    _borrowedFromAssembly =
-                                        _assemblies
-                                            .where(
-                                              (a) => a != _selectedAssembly,
-                                            )
-                                            .firstOrNull ??
-                                        _assemblies.first;
-                                  }
-                                });
-                              },
-                            ),
-                            if (_isBorrowed)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16.0),
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: _borrowedFromAssembly,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Source Assembly',
-                                  ),
-                                  items: _assemblies
-                                      .where((a) => a != _selectedAssembly)
-                                      .map((a) {
-                                        return DropdownMenuItem(
-                                          value: a,
-                                          child: Text('Asm $a'),
-                                        );
-                                      })
-                                      .toList(),
-                                  onChanged: (value) => setState(
-                                    () => _borrowedFromAssembly = value!,
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _signController,
-                              decoration: const InputDecoration(
-                                labelText: 'Signature / Name',
-                                filled: true,
-                              ),
-                              readOnly: true,
-                            ),
-                            const SizedBox(height: 16),
-                            ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(color: Colors.grey.shade300),
-                              ),
-                              title: const Text('Take Time'),
-                              subtitle: Text(
-                                _takeTime != null
-                                    ? DateFormat(
-                                        'MMM dd, yyyy - hh:mm a',
-                                      ).format(_takeTime!)
-                                    : 'Not set',
-                              ),
-                              trailing: const Icon(Icons.access_time),
-                              onTap: () => _selectDateTime(context, true),
-                            ),
-                            const SizedBox(height: 16),
-                            ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(color: Colors.grey.shade300),
-                              ),
-                              title: const Text('Submit Time'),
-                              subtitle: Text(
-                                _submitTime != null
-                                    ? DateFormat(
-                                        'MMM dd, yyyy - hh:mm a',
-                                      ).format(_submitTime!)
-                                    : 'Not set',
-                              ),
-                              trailing: const Icon(Icons.access_time),
-                              onTap: () => _selectDateTime(context, false),
-                            ),
-                          ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      CheckboxListTile(
+                        title: const Text('Enter Model Manually'),
+                        contentPadding: EdgeInsets.zero,
+                        value: _manualModel,
+                        onChanged: (value) {
+                          setState(() {
+                            _manualModel = value ?? false;
+                          });
+                        },
+                      ),
+                      if (!_manualModel)
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedModel,
+                          decoration: const InputDecoration(labelText: 'Model'),
+                          items: _models.map((model) {
+                            return DropdownMenuItem(
+                              value: model,
+                              child: Text(model),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedModel = value!;
+                              _onModelChanged(_selectedModel);
+                            });
+                          },
+                        )
+                      else
+                        TextFormField(
+                          controller: _modelController,
+                          decoration: const InputDecoration(labelText: 'Model'),
                         ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _serialNoController,
+                        textCapitalization: TextCapitalization.characters,
+                        keyboardType: TextInputType.visiblePassword,
+                        decoration: const InputDecoration(labelText: 'Serial No.'),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _saveEntry,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _batchNoController,
+                        textCapitalization: TextCapitalization.characters,
+                        keyboardType: TextInputType.visiblePassword,
+                        decoration: const InputDecoration(labelText: 'Batch No.'),
                       ),
-                      child: const Text('SAVE', style: TextStyle(fontSize: 16)),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _jobCardNoController,
+                        textCapitalization: TextCapitalization.characters,
+                        keyboardType: TextInputType.visiblePassword,
+                        decoration: const InputDecoration(labelText: 'Job Card No'),
+                      ),
+                      const SizedBox(height: 16),
+                      CheckboxListTile(
+                        title: const Text('Enter Size Manually'),
+                        contentPadding: EdgeInsets.zero,
+                        value: _manualSize,
+                        onChanged: (value) {
+                          setState(() {
+                            _manualSize = value ?? false;
+                          });
+                        },
+                      ),
+                      if (!_manualSize)
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedSize,
+                          decoration: const InputDecoration(labelText: 'Size'),
+                          items: _sizes.map((size) {
+                            return DropdownMenuItem(
+                              value: size,
+                              child: Text(size),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedSize = value!;
+                            });
+                          },
+                        )
+                      else
+                        TextFormField(
+                          controller: _sizeController,
+                          decoration: const InputDecoration(labelText: 'Size'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _quantityController,
+                        decoration: const InputDecoration(
+                          labelText: 'Quantity',
+                          filled: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                        readOnly: true,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey('asm_$_selectedAssembly'),
+                              initialValue: _selectedAssembly,
+                              decoration: const InputDecoration(
+                                labelText: 'Assembly',
+                                filled: true,
+                              ),
+                              readOnly: true,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey('sec_$_selectedSection'),
+                              initialValue: _selectedSection,
+                              decoration: const InputDecoration(
+                                labelText: 'Section',
+                                filled: true,
+                              ),
+                              readOnly: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        title: const Text('Borrowed valve from another Assembly?'),
+                        contentPadding: EdgeInsets.zero,
+                        value: _isBorrowed,
+                        onChanged: (value) {
+                          setState(() {
+                            _isBorrowed = value ?? false;
+                            if (_isBorrowed && _borrowedFromAssembly == null) {
+                              _borrowedFromAssembly = _assemblies
+                                      .where((a) => a != _selectedAssembly)
+                                      .firstOrNull ??
+                                  _assemblies.first;
+                            }
+                          });
+                        },
+                      ),
+                      if (_isBorrowed)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _borrowedFromAssembly,
+                            decoration: const InputDecoration(
+                              labelText: 'Source Assembly',
+                            ),
+                            items: _assemblies
+                                .where((a) => a != _selectedAssembly)
+                                .map((a) {
+                              return DropdownMenuItem(
+                                value: a,
+                                child: Text('Asm $a'),
+                              );
+                            }).toList(),
+                            onChanged: (value) => setState(
+                              () => _borrowedFromAssembly = value!,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _signController,
+                        decoration: const InputDecoration(
+                          labelText: 'Signature / Name',
+                          filled: true,
+                        ),
+                        readOnly: true,
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        title: const Text('Take Time'),
+                        subtitle: Text(
+                          _takeTime != null
+                              ? DateFormat('MMM dd, yyyy - hh:mm a')
+                                  .format(_takeTime!)
+                              : 'Not set',
+                        ),
+                        trailing: const Icon(Icons.access_time),
+                        onTap: () => _selectDateTime(context, true),
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        title: const Text('Submit Time'),
+                        subtitle: Text(
+                          _submitTime != null
+                              ? DateFormat('MMM dd, yyyy - hh:mm a')
+                                  .format(_submitTime!)
+                              : 'Not set',
+                        ),
+                        trailing: const Icon(Icons.access_time),
+                        onTap: () => _selectDateTime(context, false),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _saveEntry,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                ),
+                child: const Text('SAVE', style: TextStyle(fontSize: 16)),
+              ),
+            ],
           ),
-          const SafeArea(child: BannerAdWidget()),
-        ],
+        ),
       ),
+      bottomNavigationBar: _isAdLoaded && _bannerAd != null
+          ? SafeArea(
+              child: SizedBox(
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }
