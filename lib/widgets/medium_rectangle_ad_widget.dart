@@ -15,7 +15,7 @@ class _MediumRectangleAdWidgetState extends State<MediumRectangleAdWidget> {
 
   // Use real ad unit IDs for Medium Rectangle
   final String _adUnitId = Platform.isAndroid
-      ? '<YAHAN_APNI_DUSRI_EXIT_DIALOG_ID_DALEIN>' 
+      ? 'ca-app-pub-8923815584192096/8851203014' 
       : 'ca-app-pub-3940256099942544/2934735716';
 
   @override

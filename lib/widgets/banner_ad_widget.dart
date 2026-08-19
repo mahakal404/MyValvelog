@@ -15,7 +15,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   // Use real ad unit IDs
   final String _adUnitId = Platform.isAndroid
-      ? '<YAHAN_APNI_PEHLI_BANNER_ID_DALEIN>'
+      ? 'ca-app-pub-8923815584192096/8166475603'
       : 'ca-app-pub-3940256099942544/2934735716';
 
   @override

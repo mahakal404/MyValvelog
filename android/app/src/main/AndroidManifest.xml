@@ -34,7 +34,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="<YAHAN_APNI_APP_ID_DALEIN_JISME_~_HAI>"/>
+            android:value="ca-app-pub-8923815584192096~6598881096"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
