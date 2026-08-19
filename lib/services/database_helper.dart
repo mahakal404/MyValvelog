@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -69,6 +69,12 @@ CREATE TABLE entries (
     
     if (oldVersion < 3) {
       await db.execute("ALTER TABLE entries ADD COLUMN borrowedFromAssembly TEXT");
+    }
+
+    if (oldVersion < 4) {
+      // Migrate old model names to new nomenclature
+      await db.execute("UPDATE entries SET model = 'THV4' WHERE model = 'Model 4'");
+      await db.execute("UPDATE entries SET model = 'THV6' WHERE model = 'Model 6'");
     }
   }
 

@@ -666,8 +666,8 @@ class _DashboardContentState extends State<_DashboardContent> {
       'THV2',
       'THVA2',
       'THVP5',
-      'Model 4',
-      'Model 6',
+      'THV4',
+      'THV6',
     ];
     final baseSizes = [
       'All',

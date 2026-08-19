@@ -30,7 +30,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
   final _sizeController = TextEditingController();
 
   String _selectedModel = 'THV';
-  final List<String> _models = ['THV', 'THV2', 'Model 4', 'THVP5', 'Model 6'];
+  final List<String> _models = ['THV', 'THV2', 'THV4', 'THVP5', 'THV6'];
   bool _manualModel = false;
 
   String _selectedSize = '20';
