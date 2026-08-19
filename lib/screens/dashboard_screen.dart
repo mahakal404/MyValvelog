@@ -18,7 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'entry_form_screen.dart';
 import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
-import '../widgets/banner_ad_widget.dart';
+
 import '../widgets/medium_rectangle_ad_widget.dart';
 
 class DashboardScreen extends StatelessWidget {
