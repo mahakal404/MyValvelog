@@ -208,7 +208,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     final yy = DateFormat('yy').format(now);
     final suffix = '/$mmm/$yy';
 
-    if (model == 'THV2' || model == 'THVP5') {
+    if (model == 'THV2' || model == 'THV4' || model == 'THVP5' || model == 'THV6') {
       final jobCard = 'TVASM$suffix';
       _jobCardNoController.value = TextEditingValue(
         text: jobCard,
