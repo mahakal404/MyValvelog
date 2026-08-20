@@ -38,7 +38,6 @@ class _MediumRectangleAdWidgetState extends State<MediumRectangleAdWidget> {
           }
         },
         onAdFailedToLoad: (ad, err) {
-          debugPrint('MediumRectangleAd failed to load: $err');
           ad.dispose();
         },
       ),

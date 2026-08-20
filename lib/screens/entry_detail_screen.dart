@@ -54,7 +54,6 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           }
         },
         onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          debugPrint('EntryDetail BannerAd failed. Code: ${error.code}, Message: ${error.message}');
           ad.dispose();
         },
       ),

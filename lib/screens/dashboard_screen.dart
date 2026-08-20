@@ -79,7 +79,6 @@ class _DashboardContentState extends State<_DashboardContent> {
           if (mounted) setState(() => _isAdLoaded = true);
         },
         onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          debugPrint('Dashboard BannerAd failed. Code: ${error.code}, Message: ${error.message}');
           ad.dispose();
         },
       ),
