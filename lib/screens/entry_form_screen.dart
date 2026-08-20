@@ -140,7 +140,6 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     );
 
     if (size == null) {
-      debugPrint('Unable to get adaptive banner size.');
       return;
     }
 
@@ -150,7 +149,6 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (Ad ad) {
-          debugPrint('BannerAd loaded successfully.');
           if (mounted) {
             setState(() {
               _isAdLoaded = true;
@@ -158,7 +156,6 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
           }
         },
         onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          debugPrint('BannerAd failed to load. Error code: ${error.code}, Message: ${error.message}');
           ad.dispose();
         },
       ),
@@ -208,7 +205,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     final yy = DateFormat('yy').format(now);
     final suffix = '/$mmm/$yy';
 
-    if (model == 'THV2' || model == 'THV4' || model == 'THVP5' || model == 'THV6') {
+    if (model == 'THV' || model == 'THV2' || model == 'THV4' || model == 'THVP5' || model == 'THV6') {
       final jobCard = 'TVASM$suffix';
       _jobCardNoController.value = TextEditingValue(
         text: jobCard,
